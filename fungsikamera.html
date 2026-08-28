@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  <title>Buku Tamu IC CARE</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f0f2f5; font-family: sans-serif; padding-top: 20px; }
+    .kamera-container { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 12px; overflow: hidden; position: relative; box-shadow: 0 4px 6px rgba(0,0,0,0.1); background: #000; }
+    video { width: 100%; display: block; transform: scaleX(-1); /* Efek Cermin */ }
+    .overlay-text { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; color: white; background: rgba(0,0,0,0.5); padding: 5px; font-size: 13px; }
+    .card-tamu { max-width: 400px; margin: 0 auto; border-radius: 12px; border: none; }
+  </style>
+</head>
+<body>
+  <div class="container pb-5">
+    <div class="text-center mb-4">
+      <h4 class="fw-bold" style="color: #1a73e8;">Buku Tamu Digital</h4>
+      <p class="text-muted" style="font-size: 14px;">Madrasah IC CARE</p>
+    </div>
+
+    <!-- AREA KAMERA LIVE -->
+    <div class="kamera-container mb-4">
+      <video id="kamera" autoplay playsinline muted></video>
+      <div class="overlay-text">Arahkan wajah Anda ke kamera</div>
+      <canvas id="canvasTersembunyi" style="display:none;"></canvas>
+    </div>
+
+    <!-- FORM PENGISIAN TAMU -->
+    <form id="formTamu" class="card card-tamu p-4 shadow-sm" onsubmit="kirimData(event)">
+      <div class="mb-3">
+        <label class="form-label" style="font-size: 14px; font-weight: 500;">Nama Lengkap</label>
+        <input type="text" id="nama" class="form-control" required placeholder="Contoh: Zaidan Fahmi">
+      </div>
+      <div class="mb-3">
+        <label class="form-label" style="font-size: 14px; font-weight: 500;">Asal Instansi / Alamat</label>
+        <input type="text" id="instansi" class="form-control" required placeholder="Contoh: Dinas Pendidikan">
+      </div>
+      <div class="mb-4">
+        <label class="form-label" style="font-size: 14px; font-weight: 500;">Tujuan Kunjungan</label>
+        <input type="text" id="tujuan" class="form-control" required placeholder="Contoh: Rapat Koordinasi">
+      </div>
+      <button type="submit" id="btnKirim" class="btn btn-primary w-100 fw-bold py-2">Kirim & Catat Kehadiran</button>
+    </form>
+  </div>
+
+  <script>
+    // --------------------------------------------------------
+    // GANTI TEKS DI BAWAH INI DENGAN URL EXEC ANDA (TAHAP 1)
+    const URL_API = "https://script.google.com/macros/s/AKfycbzcYd61D8JMNcRq9G6F8vsI89KDphD0j6WbMVs9npz8S8eSnNgHLXZ5qdXdslbTgw/exec";
+    // --------------------------------------------------------
+
+    const video = document.getElementById('kamera');
+    
+    // Menyalakan Kamera Otomatis saat web dibuka
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { alert("Mohon izinkan akses kamera agar dapat mengisi buku tamu."); });
+
+    function kirimData(e) {
+      e.preventDefault();
+      
+      let btn = document.getElementById('btnKirim');
+      btn.disabled = true;
+      btn.innerText = "Merekam Data & Foto...";
+
+      // Ambil foto sekejap dari video (Auto-Snap)
+      let canvas = document.getElementById('canvasTersembunyi');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      
+      // Kompresi agar ringan
+      let scale = 640 / canvas.width;
+      let canvasKecil = document.createElement('canvas');
+      canvasKecil.width = 640;
+      canvasKecil.height = canvas.height * scale;
+      canvasKecil.getContext('2d').drawImage(canvas, 0, 0, canvasKecil.width, canvasKecil.height);
+      
+      let fotoBase64 = canvasKecil.toDataURL('image/webp', 0.7);
+
+      // Siapkan paket data
+      let payload = {
+        namaTamu: document.getElementById('nama').value,
+        instansiAsal: document.getElementById('instansi').value,
+        tujuan: document.getElementById('tujuan').value,
+        fotoBase64: fotoBase64
+      };
+
+      // Kirim ke Google Apps Script API
+      fetch(URL_API, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      .then(response => response.json())
+      .then(result => {
+        if(result.sukses) {
+          alert("Terima kasih! Kehadiran Anda telah tercatat.");
+          document.getElementById('formTamu').reset();
+          btn.disabled = false;
+          btn.innerText = "Kirim & Catat Kehadiran";
+        }
+      })
+      .catch(error => {
+        alert("Terjadi kesalahan jaringan.");
+        btn.disabled = false;
+        btn.innerText = "Coba Lagi";
+      });
+    }
+  </script>
+</body>
+</html>
