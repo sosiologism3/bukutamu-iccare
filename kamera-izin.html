@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kamera Gerbang IC CARE</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="container py-4" style="max-width: 500px;">
+    <div class="card shadow border-0 border-top border-success border-4">
+      <div class="card-body">
+        <h5 class="fw-bold text-success mb-1" id="judulAksi">Memuat Data...</h5>
+        <p class="text-muted small mb-3">Santri: <b id="namaSantri" class="text-dark">...</b></p>
+        
+        <div class="mb-3">
+          <label class="form-label fw-bold small">Nama Petugas Piket (Wajib):</label>
+          <input type="text" id="namaPetugas" class="form-control border-success" placeholder="Cth: Ndan Budi" required>
+        </div>
+
+        <div class="mb-3 p-2 border rounded bg-white text-center">
+          <video id="kameraVideo" autoplay playsinline style="width: 100%; max-height: 250px; background: #000; border-radius: 5px;"></video>
+          <img id="hasilFoto" class="d-none" style="width: 100%; max-height: 250px; border-radius: 5px; object-fit: contain;">
+          
+          <button id="btnJepret" class="btn btn-warning fw-bold w-100 mt-2" onclick="jepret()">📸 Jepret Foto</button>
+          <button id="btnUlang" class="btn btn-secondary fw-bold w-100 mt-2 d-none" onclick="ulang()">Ulangi Foto</button>
+        </div>
+
+        <button id="btnKirim" class="btn btn-success fw-bold w-100" onclick="kirimData()">Simpan Data ke Server</button>
+        <p id="statusPesan" class="text-center mt-2 fw-bold small"></p>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="canvasWebp" style="display: none;"></canvas>
+
+  <script>
+    // ⚠️ GANTI DENGAN URL WEB APP GOOGLE APPS SCRIPT BAPAK YANG BARU (DARI LANGKAH 1)
+    const URL_API_GAS = "https://script.google.com/macros/s/AKfycb.../exec";
+
+    // Ambil data dari URL (dikirim oleh aplikasi IC CARE)
+    const urlParams = new URLSearchParams(window.location.search);
+    const rowIdx = urlParams.get('row');
+    const aksi = urlParams.get('aksi');
+    const namaSantri = urlParams.get('nama');
+    let fotoBase64 = "";
+
+    // Tampilkan di layar
+    document.getElementById('judulAksi').innerText = aksi === 'CheckOut' ? 'Konfirmasi Check-Out' : 'Konfirmasi Check-In';
+    document.getElementById('namaSantri').innerText = namaSantri || "Data tidak ditemukan";
+
+    // Nyalakan Kamera
+    const video = document.getElementById('kameraVideo');
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => alert("Gagal menyalakan kamera!"));
+
+    function jepret() {
+      const canvas = document.getElementById('canvasWebp');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 640; canvas.height = (video.videoHeight / video.videoWidth) * 640;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      fotoBase64 = canvas.toDataURL('image/webp', 0.8);
+      
+      document.getElementById('hasilFoto').src = fotoBase64;
+      document.getElementById('hasilFoto').classList.remove('d-none');
+      video.classList.add('d-none');
+      document.getElementById('btnJepret').classList.add('d-none');
+      document.getElementById('btnUlang').classList.remove('d-none');
+    }
+
+    function ulang() {
+      fotoBase64 = "";
+      document.getElementById('hasilFoto').classList.add('d-none');
+      video.classList.remove('d-none');
+      document.getElementById('btnJepret').classList.remove('d-none');
+      document.getElementById('btnUlang').classList.add('d-none');
+    }
+
+    function kirimData() {
+      const namaPetugas = document.getElementById('namaPetugas').value.trim();
+      if(namaPetugas === "") return alert("Isi nama petugas piket!");
+      
+      const btnKirim = document.getElementById('btnKirim');
+      const statusPesan = document.getElementById('statusPesan');
+      btnKirim.disabled = true;
+      btnKirim.innerText = "Mengirim ke Google Sheets...";
+      statusPesan.innerText = "Harap tunggu, sedang menyimpan foto dan data...";
+      statusPesan.className = "text-primary text-center mt-2 fw-bold small";
+
+      // Kirim Data via API ke Google Apps Script
+      fetch(URL_API_GAS, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: "simpan_kamera_gerbang",
+          rowIdx: rowIdx,
+          aksi: aksi,
+          namaPetugas: namaPetugas,
+          fotoBase64: fotoBase64
+        })
+      })
+      .then(res => res.json())
+      .then(hasil => {
+        if(hasil.sukses) {
+          statusPesan.innerText = "✓ BERHASIL! Silakan tutup tab ini.";
+          statusPesan.className = "text-success text-center mt-2 fw-bold small";
+          btnKirim.innerText = "Selesai";
+        } else {
+          statusPesan.innerText = "❌ GAGAL: " + hasil.error;
+          statusPesan.className = "text-danger text-center mt-2 fw-bold small";
+          btnKirim.disabled = false;
+        }
+      })
+      .catch(err => {
+        statusPesan.innerText = "❌ GAGAL: Koneksi Terputus";
+        btnKirim.disabled = false;
+      });
+    }
+  </script>
+</body>
+</html>
